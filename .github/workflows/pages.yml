@@ -49,6 +49,8 @@ jobs:
           mkdir _site
           cp jobs.json _site/jobs.json
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
