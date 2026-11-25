@@ -1,0 +1,57 @@
+name: Validate and publish vacancy feed
+
+on:
+  pull_request:
+    paths:
+      - jobs.json
+      - .github/workflows/pages.yml
+  push:
+    branches: [main]
+    paths:
+      - jobs.json
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate schema and public-only boundary
+        run: >-
+          python -c "import json; d=json.load(open('jobs.json')); f={'id','company','title','location','work_model','employment_type','salary','source','source_url','description','discovered_at'}; assert d.get('schema_version')==1; assert isinstance(d.get('generated_at'),str); assert isinstance(d.get('jobs'),list) and d['jobs']; assert all(set(j)==f for j in d['jobs']); assert len({j['id'] for j in d['jobs']})==len(d['jobs']); assert len({j['source_url'] for j in d['jobs']})==len(d['jobs']); assert all(j['source_url'].startswith('https://') for j in d['jobs']); print(f\"validated {len(d['jobs'])} public vacancies\")"
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare public artifact
+        run: |
+          mkdir _site
+          cp jobs.json _site/jobs.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
